@@ -1,0 +1,4 @@
+# Real configuration may contain an API key.
+standalone.config.json
+# Generated screenshots may contain private desktop content.
+captures/

@@ -1,0 +1,24 @@
+# Runtime dependencies
+node_modules/
+
+# Local-only upstream copy
+dsh-orb/
+
+# Secrets and user data
+standalone/standalone.config.json
+standalone/captures/
+standalone/memory.jsonl
+standalone/sessions.jsonl
+standalone/traces.jsonl
+
+# Build/packaging output
+release/
+build/
+smoke-capture.png
+
+# OS/editor
+.codebuddy/
+*.lnk
+tmp-*
+Thumbs.db
+.DS_Store

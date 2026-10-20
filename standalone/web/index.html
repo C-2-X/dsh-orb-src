@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>dsh-orb standalone</title>
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  <style>
+    :root { color-scheme: dark; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: #0f1115;
+      color: #e8ecf1;
+    }
+    main {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+    h1, h2 { margin: 0 0 12px; }
+    p { color: #a6b0bf; }
+    section {
+      background: #171b22;
+      border: 1px solid #2b3240;
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+    }
+    label {
+      display: grid;
+      gap: 6px;
+      font-size: 14px;
+      color: #c7d0dd;
+    }
+    input, select, textarea, button {
+      border-radius: 10px;
+      border: 1px solid #364055;
+      background: #0f131b;
+      color: #f3f6fb;
+      font: inherit;
+      padding: 10px 12px;
+    }
+    textarea {
+      min-height: 140px;
+      resize: vertical;
+    }
+    button {
+      cursor: pointer;
+      background: #2f6df6;
+      border-color: #2f6df6;
+      font-weight: 600;
+    }
+    .row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .ghost {
+      background: transparent;
+      border-color: #364055;
+    }
+    .status {
+      font-size: 14px;
+      color: #8fc7ff;
+    }
+    img {
+      max-width: 100%;
+      border-radius: 12px;
+      border: 1px solid #364055;
+    }
+    pre {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: #0b0e13;
+      padding: 14px;
+      border-radius: 10px;
+      border: 1px solid #2b3240;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section>
+      <h1>dsh-orb standalone</h1>
+      <p>这是一个不依赖 dsh 的本地控制台。它直接复用你拆出来的 Win32 桌面能力，并通过 Agnes Chat Completions 驱动工具调用。</p>
+      <div class="status" id="status">正在加载配置...</div>
+    </section>
+
+    <section>
+      <h2>配置</h2>
+      <div class="grid">
+        <label>Base URL
+          <input id="baseURL" placeholder="https://api.agnes-ai.cn/v1">
+        </label>
+        <label>模型
+          <input id="model" list="modelOptions" placeholder="agnes-3.0-flash">
+          <datalist id="modelOptions">
+            <option value="agnes-3.0-flash">Agnes 3.0 Flash</option>
+            <option value="agnes-2.5-flash">Agnes 2.5 Flash（512K 上下文）</option>
+          </datalist>
+        </label>
+        <label>API Key
+          <input id="apiKey" type="password" placeholder="留空表示保留现有值">
+        </label>
+        <label>最大输出 tokens
+          <input id="maxTokens" type="number" min="128" max="65536">
+        </label>
+        <label>温度
+          <input id="temperature" type="number" min="0" max="2" step="0.1">
+        </label>
+        <label>最大轮数
+          <input id="maxTurns" type="number" min="1" max="100">
+        </label>
+        <label>动作后等待毫秒
+          <input id="postActionWaitMs" type="number" min="0" max="60000">
+        </label>
+        <label>图片传入方式
+          <select id="imageInputFormat">
+            <option value="data_url">data URL（内联，推荐）</option>
+            <option value="url">公网 URL</option>
+          </select>
+        </label>
+        <label>公网 Base URL
+          <input id="publicBaseUrl" placeholder="https://your-tunnel.example.com">
+        </label>
+        <label>端口
+          <input id="port" type="number" min="1" max="65535">
+        </label>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button id="saveConfig">保存配置</button>
+        <button id="clearApiKey" class="ghost">清除 API Key</button>
+        <button id="clearMemory" class="ghost">清空经验记忆</button>
+        <button id="observe" class="ghost">观察桌面</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>任务</h2>
+      <label>提示词
+        <textarea id="prompt" placeholder="例如：打开微信并给我看看最近联系人列表。"></textarea>
+      </label>
+      <div class="row" style="margin-top:12px">
+        <button id="runTask">运行任务</button>
+        <button id="stopTask" class="ghost">停止任务</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>常驻任务</h2>
+      <p>按检测间隔持续观察桌面并推进目标；无变化时不会调用模型。悬浮球里发送“常驻：&lt;目标&gt;”同样可以启动。运行期间一次性任务会被拒绝，随时可用“停止任务”中断。</p>
+      <label>监控目标
+        <textarea id="goal" placeholder="例如：监控微信，收到新消息时自动回复：您好，我稍后回复您。"></textarea>
+      </label>
+      <div class="row" style="margin-top:12px">
+        <label style="min-width:180px">检测间隔（秒，留空用默认 5 秒）
+          <input id="intervalSeconds" type="number" min="3" max="600" placeholder="5">
+        </label>
+        <label style="min-width:180px">最长运行（分钟，留空用默认 120）
+          <input id="maxMinutes" type="number" min="1" max="1440" placeholder="120">
+        </label>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button id="startPersistent">开始常驻任务</button>
+        <button id="stopPersistent" class="ghost">停止常驻任务</button>
+      </div>
+      <div class="status" id="persistentStatus" style="margin-top:10px">未启动。</div>
+    </section>
+
+    <section>
+      <h2>会话历史</h2>
+      <p>删除单条会话会同时删除它引用的截图；“清空全部”会清空所有会话记录和 captures/ 下的截图，不可恢复。</p>
+      <div class="row" style="margin-bottom:10px">
+        <button id="clearSessions" class="ghost">清空全部（含截图）</button>
+      </div>
+      <div id="sessionList" style="display:grid;gap:8px;opacity:.9">加载中...</div>
+    </section>
+
+    <section>
+      <h2>最新截图</h2>
+      <img id="capture" alt="最新桌面截图" style="display:none">
+      <p id="captureMeta">还没有截图。</p>
+    </section>
+
+    <section>
+      <h2>结果</h2>
+      <pre id="output">等待操作...</pre>
+    </section>
+  </main>
+
+  <script>
+    const statusEl = document.getElementById('status')
+    const outputEl = document.getElementById('output')
+    const captureEl = document.getElementById('capture')
+    const captureMetaEl = document.getElementById('captureMeta')
+
+    async function request(path, options) {
+      const response = await fetch(path, options)
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`)
+      return data
+    }
+
+    async function loadConfig() {
+      const data = await request('/api/config')
+      const config = data.config
+      document.getElementById('baseURL').value = config.agnes.baseURL
+      document.getElementById('model').value = config.agnes.model
+      document.getElementById('apiKey').value = ''
+      document.getElementById('maxTokens').value = config.agnes.maxTokens
+      document.getElementById('temperature').value = config.agnes.temperature
+      document.getElementById('maxTurns').value = config.agent.maxTurns
+      document.getElementById('postActionWaitMs').value = config.agent.postActionWaitMs
+      document.getElementById('imageInputFormat').value = config.agent.imageInputFormat
+      document.getElementById('publicBaseUrl').value = config.agent.publicBaseUrl
+      document.getElementById('port').value = config.server.port
+      try {
+        const catalog = await request('/api/models')
+        const options = Array.isArray(catalog.models) ? catalog.models : []
+        document.getElementById('modelOptions').innerHTML = options
+          .map((model) => `<option value="${model.id}">${model.name}${model.contextWindow ? `（${Math.round(model.contextWindow / 1000)}K 上下文）` : ''}</option>`)
+          .join('')
+      } catch {}
+      const memory = config.agent.memoryEnabled
+        ? `经验记忆：${data.memoryCount ?? 0} 条`
+        : '经验记忆：已关闭'
+      statusEl.textContent = `配置文件：${data.configPath} | API Key：${config.agnes.hasApiKey ? config.agnes.apiKeyMasked : '未设置'} | ${memory}`
+    }
+
+    function showCapture(meta) {
+      if (meta.captureUrl) {
+        captureEl.src = meta.captureUrl + `?t=${Date.now()}`
+        captureEl.style.display = 'block'
+      }
+      captureMetaEl.textContent = meta.capturePath
+        ? `截图路径：${meta.capturePath}`
+        : '当前未启用落盘截图。'
+    }
+
+    async function saveConfig() {
+      statusEl.textContent = '正在保存配置...'
+      const payload = {
+        agnes: {
+          baseURL: document.getElementById('baseURL').value.trim(),
+          model: document.getElementById('model').value.trim(),
+          apiKey: document.getElementById('apiKey').value,
+          maxTokens: Number(document.getElementById('maxTokens').value),
+          temperature: Number(document.getElementById('temperature').value)
+        },
+        agent: {
+          maxTurns: Number(document.getElementById('maxTurns').value),
+          postActionWaitMs: Number(document.getElementById('postActionWaitMs').value),
+          imageInputFormat: document.getElementById('imageInputFormat').value,
+          publicBaseUrl: document.getElementById('publicBaseUrl').value.trim()
+        },
+        server: {
+          port: Number(document.getElementById('port').value)
+        }
+      }
+      await request('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+      await loadConfig()
+      statusEl.textContent = '配置已保存。'
+    }
+
+    async function clearApiKey() {
+      if (!confirm('确定清除已保存的 API Key？')) return
+      statusEl.textContent = '正在清除 API Key...'
+      await request('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clearApiKey: true })
+      })
+      await loadConfig()
+      statusEl.textContent = 'API Key 已清除。'
+    }
+
+    async function clearMemory() {
+      const data = await request('/api/config')
+      const count = data.memoryCount ?? 0
+      if (count === 0) {
+        statusEl.textContent = '经验记忆已经是空的。'
+        return
+      }
+      if (!confirm(`确定清空全部 ${count} 条经验记忆？清空后 agent 将不再参考以前的任务记录。`)) return
+      statusEl.textContent = '正在清空经验记忆...'
+      const result = await request('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clearMemory: true })
+      })
+      await loadConfig()
+      statusEl.textContent = `经验记忆已清空（${result.memoryCleared ?? count} 条）。`
+    }
+
+    async function observe() {
+      statusEl.textContent = '正在抓取桌面截图...'
+      const data = await request('/api/observe', { method: 'POST' })
+      showCapture(data)
+      outputEl.textContent = JSON.stringify(data, null, 2)
+      statusEl.textContent = '桌面观察已刷新。'
+    }
+
+    async function runTask() {
+      const prompt = document.getElementById('prompt').value.trim()
+      if (!prompt) {
+        statusEl.textContent = '请先输入任务。'
+        return
+      }
+      statusEl.textContent = '任务运行中，请稍候...'
+      outputEl.textContent = '运行中...'
+      try {
+        const data = await request('/api/run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt })
+        })
+        if (data.finalObservation) showCapture(data.finalObservation)
+        outputEl.textContent = JSON.stringify(data, null, 2)
+        statusEl.textContent = data.stopped ? '任务已停止。' : '任务完成。'
+      } catch (error) {
+        outputEl.textContent = String(error.message || error)
+        statusEl.textContent = '任务失败。'
+      }
+    }
+
+    async function stopTask() {
+      statusEl.textContent = '正在请求停止...'
+      try {
+        const data = await request('/api/stop', { method: 'POST' })
+        statusEl.textContent = data.stopped ? '停止请求已发送，等待任务收尾...' : '当前没有运行中的任务。'
+      } catch (error) {
+        statusEl.textContent = '停止失败：' + String(error.message || error)
+      }
+    }
+
+    const persistentStatusEl = document.getElementById('persistentStatus')
+    let persistentPoller = null
+    function stopPersistentPoller() {
+      if (persistentPoller) { clearInterval(persistentPoller); persistentPoller = null }
+    }
+    function renderPersistentProgress(status) {
+      if (!status.running) { stopPersistentPoller(); return }
+      const p = status.progress
+      if (!p) { persistentStatusEl.textContent = '常驻任务运行中...'; return }
+      const minutes = Math.floor(p.elapsedMs / 60000)
+      const seconds = Math.floor((p.elapsedMs % 60000) / 1000)
+      persistentStatusEl.textContent = `运行中 ${minutes}分${seconds}秒 · 已检查 ${p.checks} 次 · 已执行 ${p.actions} 个动作`
+    }
+    async function pollPersistentOnce() {
+      try { renderPersistentProgress(await request('/api/status')) } catch {}
+    }
+    async function startPersistent() {
+      const goal = document.getElementById('goal').value.trim()
+      if (!goal) { persistentStatusEl.textContent = '请先填写监控目标。'; return }
+      const seconds = Number(document.getElementById('intervalSeconds').value)
+      const minutes = Number(document.getElementById('maxMinutes').value)
+      const body = { goal }
+      if (Number.isFinite(seconds) && seconds > 0) body.intervalMs = Math.round(seconds * 1000)
+      if (Number.isFinite(minutes) && minutes > 0) body.maxDurationMs = Math.round(minutes * 60000)
+      persistentStatusEl.textContent = '正在启动常驻任务...'
+      stopPersistentPoller()
+      persistentPoller = setInterval(() => { void pollPersistentOnce() }, 2000)
+      try {
+        const data = await request('/api/task/persistent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        })
+        stopPersistentPoller()
+        if (data.stopped) persistentStatusEl.textContent = '常驻任务已停止。'
+        else if (data.guarded) persistentStatusEl.textContent = `已到时长上限：${data.answer}`
+        else persistentStatusEl.textContent = `常驻任务完成（${data.turns} 次检查）：${data.answer}`
+        outputEl.textContent = JSON.stringify(data, null, 2)
+      } catch (error) {
+        stopPersistentPoller()
+        persistentStatusEl.textContent = '常驻任务失败：' + String(error.message || error)
+      }
+    }
+    async function stopPersistent() {
+      try {
+        const data = await request('/api/stop', { method: 'POST' })
+        persistentStatusEl.textContent = data.stopped ? '停止请求已发送，等待任务收尾...' : '当前没有运行中的常驻任务。'
+      } catch (error) {
+        persistentStatusEl.textContent = '停止失败：' + String(error.message || error)
+      }
+    }
+
+    const sessionListEl = document.getElementById('sessionList')
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]))
+    }
+    async function loadSessions() {
+      try {
+        const data = await request('/api/sessions')
+        const sessions = Array.isArray(data.sessions) ? data.sessions : []
+        if (sessions.length === 0) {
+          sessionListEl.innerHTML = '<p style="opacity:.7">还没有会话记录。</p>'
+          return
+        }
+        sessionListEl.innerHTML = sessions.map((session) => `
+          <div class="row" style="justify-content:space-between;align-items:center;border-bottom:1px solid #263041;padding:8px 0;gap:12px">
+            <div style="min-width:0">
+              <strong>${escapeHtml(session.title)}</strong><br>
+              <span style="opacity:.7;font-size:12px">${escapeHtml(session.updatedAt || '')} · ${Number(session.captures || 0)} 张截图</span>
+            </div>
+            <button class="ghost" type="button" data-delete="${escapeHtml(session.sessionId)}">删除</button>
+          </div>`).join('')
+      } catch (error) {
+        sessionListEl.innerHTML = `<p style="opacity:.7">加载失败：${escapeHtml(error.message)}</p>`
+      }
+    }
+    sessionListEl.addEventListener('click', async (event) => {
+      const id = event.target?.dataset?.delete
+      if (!id) return
+      if (!confirm('删除这条会话及其截图？不可恢复。')) return
+      try {
+        const result = await request('/api/sessions/' + encodeURIComponent(id), { method: 'DELETE' })
+        await loadSessions()
+        outputEl.textContent = `已删除会话（截图 ${result.captures ?? 0} 张）。`
+      } catch (error) {
+        outputEl.textContent = `删除失败：${error.message}`
+      }
+    })
+    document.getElementById('clearSessions').addEventListener('click', async () => {
+      if (!confirm('清空全部会话记录和 captures/ 下的截图？不可恢复。')) return
+      if (!confirm('再确认一次：所有对话历史和截图都会被删除。')) return
+      try {
+        const result = await request('/api/sessions/clear', { method: 'POST' })
+        await loadSessions()
+        outputEl.textContent = `已清空 ${result.sessions ?? 0} 条会话、${result.captures ?? 0} 张截图。`
+      } catch (error) {
+        outputEl.textContent = `清空失败：${error.message}`
+      }
+    })
+
+    document.getElementById('saveConfig').addEventListener('click', () => { void saveConfig() })
+    document.getElementById('clearApiKey').addEventListener('click', () => { void clearApiKey() })
+    document.getElementById('clearMemory').addEventListener('click', () => { void clearMemory() })
+    document.getElementById('observe').addEventListener('click', () => { void observe() })
+    document.getElementById('runTask').addEventListener('click', () => { void runTask() })
+    document.getElementById('stopTask').addEventListener('click', () => { void stopTask() })
+    document.getElementById('startPersistent').addEventListener('click', () => { void startPersistent() })
+    document.getElementById('stopPersistent').addEventListener('click', () => { void stopPersistent() })
+
+    void loadConfig()
+    void loadSessions()
+  </script>
+</body>
+</html>

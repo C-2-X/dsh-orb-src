@@ -1,0 +1,54 @@
+{
+  "agnes": {
+    "baseURL": "https://api.agnes-ai.cn/v1",
+    "apiKey": "",
+    "model": "agnes-3.0-flash",
+    "maxTokens": 8192,
+    "temperature": 0.2,
+    "thinking": true,
+    "chatTemplateKwargs": {}
+  },
+  "agent": {
+    "maxTurns": 18,
+    "postActionWaitMs": 600,
+    "coordinateMode": "millifraction",
+    "imageInputFormat": "data_url",
+    "publicBaseUrl": "",
+    "saveCaptures": true,
+    "captureDir": "./captures",
+    "imageMaxEdge": 0,
+    "observationFrame": false,
+    "pointTargetGuard": false,
+    "maxScreenshotsInContext": 2,
+    "waitForStable": true,
+    "maxPostActionWaitMs": 3000,
+    "inputDispatch": "foreground",
+    "foregroundGuard": true,
+    "focusBeforeInput": true,
+    "inputChunkDelayMs": 12,
+    "browserBackend": "off",
+    "cdpHost": "127.0.0.1",
+    "cdpPort": 9222,
+    "memoryEnabled": true,
+    "memoryMaxItems": 3,
+    "memoryFile": "./memory.jsonl",
+    "traceEnabled": true,
+    "traceFile": "./traces.jsonl",
+    "sessionFile": "./sessions.jsonl",
+    "sessionHistoryLimit": 20,
+    "persistent": {
+      "defaultIntervalMs": 5000,
+      "minIntervalMs": 3000,
+      "intervalJitterMs": 1500,
+      "maxDurationMs": 7200000,
+      "maxActions": 200,
+      "maxSendsPerHour": 60,
+      "maxContextMessages": 40,
+      "captureOnIdle": true
+    }
+  },
+  "server": {
+    "host": "127.0.0.1",
+    "port": 3737
+  }
+}
